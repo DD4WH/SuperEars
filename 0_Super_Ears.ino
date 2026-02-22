@@ -18,7 +18,7 @@
  * 
  * (c) Frank DD4WH 2022-10-05
  *  this version from 2024-07-23
- *  latest version from 2025-09-19
+ *  latest version from 2026-02-22
  * 
  * TODO:
  * - use FIR filters instead of IIR to preserve phase information for stereo locating (is this important???)
@@ -75,7 +75,8 @@
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
-#include <Bounce.h>
+//#include <Bounce.h>
+#include <Bounce2.h>
 #include <arm_math.h>
 #include <arm_const_structs.h> // in the Teensy 4.0 audio library, the ARM CMSIS DSP lib is already a newer version
 #include <utility/imxrt_hw.h>
@@ -105,15 +106,26 @@ double SAMPLE_RATE = 96000; // standard sample rate
 //double SAMPLE_RATE = 192000;
 float32_t vol_knob_gain_dB = 0.0;
 float32_t audio_gain = 2.0f; 
+float32_t het_gain_factor = 1.0f;
 
 // DD4WH: 3 buttons used
 #define PINPUSH  31 //DD4WH
 #define PINUP    30 //DD4WH
 #define PINDOWN  32 //DD4WH
 #define POTI     17 //DD4WH 
-Bounce push_button = Bounce(PINPUSH, 15);
-Bounce up_button = Bounce(PINUP, 15);
-Bounce down_button = Bounce(PINDOWN, 15);
+//Bounce push_button = Bounce(PINPUSH, 15);
+//Bounce up_button = Bounce(PINUP, 15);
+//Bounce down_button = Bounce(PINDOWN, 15);
+//Bounce2::Button push_button = Bounce2::Button();
+//Bounce2::Button up_button = Bounce2::Button();
+//Bounce2::Button down_button = Bounce2::Button();
+
+Bounce push_button = Bounce(); 
+Bounce up_button = Bounce(); 
+Bounce down_button = Bounce(); 
+uint8_t push_button_state = 0;
+uint8_t up_button_state = 0;
+uint8_t down_button_state = 0;
 
 // GUItool: begin automatically generated code
 AudioInputI2S            i2sIN;          //xy=111.19999694824219,376
@@ -156,9 +168,17 @@ AudioConnection          patchCord17(gainL, biquadOUTL);
 AudioConnection          patchCord18(biquadOUTL, 0, i2sOUT, 1);
 AudioConnection          patchCord19(biquadOUTR, 0, i2sOUT, 0);
 
-int shift = 2; // 1 = pass-thru, 5 = heterodyne, 2-4 = shift by one (2), one-and-a-half (3) or two octaves (4)
-int shift_new = 2;
-int lowest_shift = 1; // to allow pass-thru (beware of feedback !), set this to 1, otherwise set this to 2
+#define PASSTHRU            1
+#define PITCHSHIFT_1        2
+#define PITCHSHIFT_15       3
+#define PITCHSHIFT_2        4
+#define AUTO_HETERODYNE     5
+#define MANUAL_HETERODYNE   6
+
+int shift = PITCHSHIFT_1; // 1 = pass-thru, 5 = heterodyne, 2-4 = shift by one (2), one-and-a-half (3) or two octaves (4)
+int shift_new = PITCHSHIFT_1;
+int lowest_shift = PITCHSHIFT_1; // to allow pass-thru (beware of feedback !), set this to 1, otherwise set this to 2
+int highest_shift = MANUAL_HETERODYNE;
 #define BLOCK_SIZE 128
 const int N_BLOCKS = 6; //9; // 6 blocks á 128 samples  = 768 samples. No. of samples has to be dividable by 2 AND by 3 AND by 4 // 6 blocks of 128 samples == 768 samples = 17.4ms of delay
 const int WINDOW_LENGTH = N_BLOCKS * BLOCK_SIZE;
@@ -178,6 +198,7 @@ float32_t window[N_BLOCKS * BLOCK_SIZE];
 int buffer_idx = 0;
 
 int het_freq = 22000;
+int het_freq_const = 500;
 int last_LO_frequency=22000;
 int FFT_max_freq = last_LO_frequency;
 float32_t FFT_bin [128];
@@ -227,14 +248,25 @@ int hop1 = 1;
 int hop2 = 2;
 int hop3 = 3;
 
+
 void setup() {
   Serial.begin(115200);
   delay(100);
   set_arm_clock(396000000);
   Serial.printf("Teensy 4.1 F_CPU %d, F_CPU_ACTUAL %d, F_BUS_ACTUAL %d\n", F_CPU, F_CPU_ACTUAL, F_BUS_ACTUAL);
+  //pinMode(PINPUSH, INPUT_PULLUP);
   pinMode(PINPUSH, INPUT_PULLUP);
+  push_button.attach(PINPUSH);
+  push_button.interval(25);
+  //push_button.setPressedState(LOW);
   pinMode(PINUP, INPUT_PULLUP);
+  up_button.attach(PINUP);
+  up_button.interval(25);
+  //up_button.setPressedState(LOW);
   pinMode(PINDOWN, INPUT_PULLUP);
+  down_button.attach(PINDOWN);
+  down_button.interval(25);
+  //down_button.setPressedState(LOW);
 
   AudioMemory(200); // must be high enough to deliver 16 stereo blocks = 32 * 128 samples at any point in time! 
   delay(100);
@@ -381,6 +413,10 @@ void init_heterodyne(void) {
   SineR.frequency(het_freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));
   SineL.amplitude(0.9f);
   SineR.amplitude(0.9f);
+  // adjust gain
+  het_gain_factor = 10.0f;
+  gainR.gain(audio_gain * het_gain_factor);
+  gainL.gain(audio_gain * het_gain_factor);
   display_het_freq();
  }
 
@@ -399,12 +435,21 @@ void init_pitch_shift(void) {
   mixerR.gain(1, 0.0); // 0 == pitch shift, 1 == heterodyne
   SineL.amplitude(0.0f);
   SineR.amplitude(0.0f);
+  // adjust gain
+  het_gain_factor = 1.0f;
+  gainR.gain(audio_gain * het_gain_factor);
+  gainL.gain(audio_gain * het_gain_factor);
 }
 
 elapsedMillis memorytimer = 0;
 
 void loop() {
 elapsedMicros usec = 0;
+
+          // read buttons
+          push_button.update();
+          up_button.update();
+          down_button.update();
 
   //check the potentiometer
 //    servicePotentiometer(millis(),100); //service the potentiometer every 100 msec
@@ -413,7 +458,7 @@ elapsedMicros usec = 0;
     if(shift_new != shift) 
     {
       shift = shift_new;
-      if (shift == 5)
+      if (shift == AUTO_HETERODYNE || shift == MANUAL_HETERODYNE)
       {
         init_heterodyne();
       }
@@ -447,7 +492,7 @@ elapsedMicros usec = 0;
           Highpass Filter to supress low frequency noise and supress down-pitching sounds that can be heard with the ear 
        *********************************************************************************************************************/
 
-       if(shift != 1)
+       if(shift != PASSTHRU)
        { 
           arm_fir_f32(&highpass_R, &in_buffer_R[buffer_idx][0], hp_buffer_R, BLOCK_SIZE * N_BLOCKS);
           arm_fir_f32(&highpass_L, &in_buffer_L[buffer_idx][0], hp_buffer_L, BLOCK_SIZE * N_BLOCKS);
@@ -464,7 +509,7 @@ elapsedMicros usec = 0;
 
 //      we apply the second half of the window to the first half of the input buffer
 //      works for N==2 
-        if(shift == 2)
+        if(shift == PITCHSHIFT_1)
         {
             for (unsigned i = 0; i < WINDOW_LENGTH_D_2; i++)
             {
@@ -479,7 +524,7 @@ elapsedMicros usec = 0;
               in_buffer_R[buffer_idx][i + WINDOW_LENGTH_D_2] = in_buffer_R[buffer_idx][i + WINDOW_LENGTH_D_2] * window[i];
             }
         }
-        else if(shift == 3)
+        else if(shift == PITCHSHIFT_15)
         {
            for (unsigned i = 0; i < WINDOW_LENGTH; i++)
            {
@@ -487,7 +532,7 @@ elapsedMicros usec = 0;
               in_buffer_R[buffer_idx][i] = in_buffer_R[buffer_idx][i] * window[i];
            }          
         }
-        else if(shift == 4)
+        else if(shift == PITCHSHIFT_2)
         {
            for (unsigned i = 0; i < WINDOW_LENGTH; i++)
            {
@@ -500,7 +545,7 @@ elapsedMicros usec = 0;
       /**********************************************************************************
           2 Overlap & Add 
        **********************************************************************************/
-        if(shift == 2)
+        if(shift == PITCHSHIFT_1)
         {
             for (unsigned i = 0; i < WINDOW_LENGTH_D_2; i++)
             {
@@ -508,7 +553,7 @@ elapsedMicros usec = 0;
               add_buffer_R[i] = in_buffer_R[buffer_idx][i] + in_buffer_R[buffer_idx][i + WINDOW_LENGTH_D_2];
             }
         }
-        else if(shift == 3)
+        else if(shift == PITCHSHIFT_15)
         {   // index of in_buffer    [0][x]  [1][x]  [2][x]  
             if(buffer_idx==2)       {hop0=2, hop1=1, hop2=0;}
             else if(buffer_idx==1)  {hop0=1, hop1=0, hop2=2;}
@@ -525,7 +570,7 @@ elapsedMicros usec = 0;
             buffer_idx = buffer_idx + 1;  // increment
             if (buffer_idx >=3) {buffer_idx = 0;} // flip-over           
         }
-        else if(shift == 4)
+        else if(shift == PITCHSHIFT_2)
         {   // index of in_buffer    [0][x]  [1][x]  [2][x]  [3][x]
             if(buffer_idx == 3)     {hop0=3, hop1=2, hop2=1, hop3=0;}
             else if(buffer_idx==2)  {hop0=2, hop1=1, hop2=0, hop3=3;}
@@ -551,7 +596,7 @@ elapsedMicros usec = 0;
 
       // interpolation-in-place does not work
       // blocksize is BEFORE zero stuffing
-      if(shift == 2 || shift == 3 || shift == 4)
+      if(shift == PITCHSHIFT_1 || shift == PITCHSHIFT_15 || shift == PITCHSHIFT_2)
       {
           arm_fir_interpolate_f32(&interpolation_L, add_buffer_L, out_buffer_L, BLOCK_SIZE * N_BLOCKS / (uint32_t)(shift));
           arm_fir_interpolate_f32(&interpolation_R, add_buffer_R, out_buffer_R, BLOCK_SIZE * N_BLOCKS / (uint32_t)(shift));
@@ -564,7 +609,7 @@ elapsedMicros usec = 0;
       /**********************************************************************************
           Just copy input into output buffer for testing/pass-thru
        **********************************************************************************/
-      if(shift == 1)
+      if(shift == PASSTHRU)
       {
         for (unsigned i = 0; i < BLOCK_SIZE * N_BLOCKS; i++)
         {
@@ -589,7 +634,7 @@ elapsedMicros usec = 0;
       elapsed_micros_idx_t++;
     } // end of pitch shift audio process loop
 
-    if(shift == 5)
+    if(shift == AUTO_HETERODYNE)
     {
         if (FFT256.available())
         {
@@ -605,17 +650,16 @@ elapsedMicros usec = 0;
                 Serial.println();
                 */
         }
-        if(adjust_LO)
-        {
-            //check_LO();
-            Serial.println("Checking LO");
-        }
-    }
-
-    
-    if((memorytimer > 500) & (shift == 5))
+    } 
+      else if (shift == MANUAL_HETERODYNE)
     {
-        //print_audio_lib_usage();
+      
+    }
+    
+    
+    if((memorytimer > 2000) & (shift == AUTO_HETERODYNE || shift == MANUAL_HETERODYNE))
+    {
+        print_audio_lib_usage();
         //display_found_bats();
         memorytimer = 0;
     }
@@ -660,7 +704,6 @@ elapsedMicros usec = 0;
         elapsed_micros_mean = 0;        
       }
 #endif   
-
     
       /**********************************************************************************
           Add button check etc. here
@@ -790,31 +833,77 @@ float m_sinc(int m, float fc)
       void servicePotentiometer(unsigned long curTime_millis, unsigned long updatePeriod_millis) {
           static unsigned long lastUpdate_millis = 0;
           static float prev_val = -1.0;
+          static uint8_t last_push_button_state = 0;          
+          static uint8_t last_up_button_state = 0;          
+          static uint8_t last_down_button_state = 0;
+          static uint32_t up_down_counter = 0;
       
         //has enough time passed to update everything?
           if (curTime_millis < lastUpdate_millis) lastUpdate_millis = 0; //handle wrap-around of the clock
-          if ((curTime_millis - lastUpdate_millis) > updatePeriod_millis) { //is it time to update the user interface?
+          if ((curTime_millis - lastUpdate_millis) > updatePeriod_millis) 
+          { //is it time to update the user interface?
       
-          // read buttons
-          push_button.update();
-          up_button.update();
-          down_button.update();
-          if (push_button.fallingEdge()) 
-          {
+         
+          push_button_state = push_button.read(); // read();
+          up_button_state = up_button.read();
+          down_button_state = down_button.read();
+
+          if (push_button_state == LOW && last_push_button_state == HIGH) 
+           {
               Serial.println("Push-Button Press");
               shift_new = shift_new + 1;
-              if(shift_new > 5)
+              if(shift_new > MANUAL_HETERODYNE)
               {
-                  audio_gain *= 0.5f;
                   shift_new = lowest_shift;
               }
               Serial.print("New Shift is: "); Serial.println(shift_new);
               display_mode();
               
-          } 
-          // add other buttons here
-      
+          } else if (up_button_state == LOW)
+          {   up_down_counter++;
+
+              if(shift == MANUAL_HETERODYNE)
+              {
+                  het_freq = het_freq + het_freq_const;
+                  adjust_heterodyne_LO(het_freq);
+              }
+              if(last_up_button_state == HIGH)
+              {
+                  Serial.println("Reset up_down_counter");
+                  up_down_counter = 0;
+              }
+          } else if (down_button_state == LOW)
+          {   up_down_counter++;
+
+              if(shift == MANUAL_HETERODYNE)
+              {
+                  het_freq = het_freq - het_freq_const;
+                  adjust_heterodyne_LO(het_freq);
+              }
+              if(last_down_button_state == HIGH)
+              {
+                  Serial.println("Reset up_down_counter");
+                  up_down_counter = 0;
+              }
+          }
+           
+          last_push_button_state = push_button_state;
+          last_up_button_state = up_button_state;
+          last_down_button_state = down_button_state;
           
+          if(up_down_counter > 20)
+          {
+              het_freq_const = 500;
+          } 
+            else if(up_down_counter > 5)
+          {
+              het_freq_const = 100;
+          }
+            else  
+          {
+              het_freq_const = 100; 
+          }
+           
           //read potentiometer
           static float old_val = 0; 
           float val = (1023.0f - (float32_t)analogRead(POTI)) / 1023.0; //0.0 to 1.0
@@ -834,9 +923,10 @@ float m_sinc(int m, float fc)
             //command the new gain setting
             if(vol_knob_gain_dB == 0.0) vol_knob_gain_dB = 0.01;
             audio_gain = powf(10.0, vol_knob_gain_dB / 20.0);
-            if(shift == 5) audio_gain *=2.0f;
-            gainR.gain(audio_gain);
-            gainL.gain(audio_gain);
+            //if(shift == 5) audio_gain *=2.0f;
+            //if(shift == AUTO_HETERODYNE || shift == MANUAL_HETERODYNE) audio_gain *=10.0f;
+            gainR.gain(audio_gain * het_gain_factor);
+            gainL.gain(audio_gain * het_gain_factor);
             //Serial.print("Poti-Wert (0 bis 1): "); Serial.println(val);
             //Serial.print("servicePotentiometer: Digital Gain dB = "); Serial.println(vol_knob_gain_dB); //print text to Serial port for debugging
           }
@@ -962,7 +1052,7 @@ void Print_processor_load(long msec) {
           // goto 1.    
           float32_t lower_ultrasound_limit = 14000.0f;
           int lower_ultrasound_limit_idx = (int)(lower_ultrasound_limit / 375.0f);
-          for (unsigned x=0; x < lower_ultrasound_limit_idx; x++)
+          for (int x=0; x < lower_ultrasound_limit_idx; x++)
           {
               FFT_bin[x] = 0; // zero out DC part and low freqs
           }
@@ -973,7 +1063,7 @@ void Print_processor_load(long msec) {
           
           arm_max_f32(FFT_bin, 128, &FFT_max, &FFT_max_idx);
           arm_mean_f32(FFT_bin, 128, &FFT_mean);
-          Serial.print("Mean: "); Serial.print(FFT_mean, 6); Serial.print("              MAX:  "); Serial.print(FFT_max,4); Serial.print("               MAX/MEAN = "); Serial.println(FFT_max/FFT_mean, 2); 
+          //Serial.print("Mean: "); Serial.print(FFT_mean, 6); Serial.print("              MAX:  "); Serial.print(FFT_max,4); Serial.print("               MAX/MEAN = "); Serial.println(FFT_max/FFT_mean, 2); 
           // only adjust frequency 
           if(FFT_max > FFT_mean * 4.0f && FFT_max > 0.002f)
           {
@@ -982,42 +1072,9 @@ void Print_processor_load(long msec) {
               int rounded_freq = int((FFT_max_freq / 100)) * 100;
               //if (fabsf(last_LO_frequency - FFT_max_freq) > 50)                          //only adjust when necessary
               {
-                  SineL.frequency(rounded_freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));  
-                  SineR.frequency(rounded_freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));
-                  SineL.amplitude(0.9f);
-                  SineR.amplitude(0.9f);
-                  last_LO_frequency = rounded_freq;
-                  het_freq = (int)rounded_freq;
-                  display_het_freq();
+                  adjust_heterodyne_LO(rounded_freq);
               }
           }     
- /*         
-          for (unsigned x=0; x < 4; x++)
-          {
-              FFT_bin[x] = 0; // zero out DC part and low freqs
-          }
-          for (uint16_t x=4; x < 128; x++)
-          {
-              FFT_bin[x] = FFT256.output[x];
-          }
-          arm_max_q15(FFT_bin, 128, &FFT_max1, &FFT_max_bin1);
-          arm_mean_q15(FFT_bin, 128, &FFT_mean1);
-          
-          //if((FFT_max1 > 1.1 * FFT_mean1) && (FFT_mean1 > 0))
-          if(1)
-          {
-              //FFT_max_freq = (int)((float)FFT_max_bin1 * (float)SAMPLE_RATE / (float)FFT_points);
-
-              FFT_max_freq = (int)(((float)FFT_max_freq * 0.95f) + ((float)FFT_max_bin1 * (float)SAMPLE_RATE / (float)FFT_points * 0.05f));    
-              check_LO();
-              Serial.print("FFT max freq = "); Serial.println(FFT_max_freq);
-          }
-          else
-          {
-               
-          }
-                
-    */      
 
     /*  
           // search array in two parts: 
@@ -1061,21 +1118,6 @@ void Print_processor_load(long msec) {
 
       }  // END function search_bats()
 
-      void check_LO() 
-      {
-          //int frequency = int((FFT_max_bin1 * (SAMPLE_RATE / FFT_points) / 500)) * 500 + 1000; //round to nearest 500hz and shift 1000hz up to make the signal audible
-          int frequency = FFT_max_freq;
-          if (fabsf(last_LO_frequency - frequency) > 50)                          //only adjust when necessary
-          {
-          het_freq = frequency;
-          SineL.frequency(het_freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));  
-          SineR.frequency(het_freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));
-          SineL.amplitude(0.9f);
-          SineR.amplitude(0.9f);
-          last_LO_frequency = het_freq;
-          display_het_freq();
-          }               
-      }
 
       void display_mode(void)
       {
@@ -1086,10 +1128,7 @@ void Print_processor_load(long msec) {
               {
                   Display->println("Pitch Shift: ");
               }
-              else
-              {
-                  Display->println("Heterodyne Mode");
-              }
+              
               Display->setCursor(3,37);
               switch(shift_new)
               {
@@ -1099,7 +1138,7 @@ void Print_processor_load(long msec) {
                   case 4: Display->printf("two "); break;
                   default: break;
               }
-              if (shift_new != 5) Display->println("oct.");      
+              Display->println("oct.");
               Display->sendBuffer();
       }
 
@@ -1108,11 +1147,17 @@ void Print_processor_load(long msec) {
               Display->clearBuffer();
               Display->setFont(u8g2_font_6x10_mf);  // Hauteur 7
               Display->setCursor(3,25);
-              Display->println("Heterodyne Mode");
+              if (shift_new == AUTO_HETERODYNE)
+              {
+                  Display->println("Auto-Heterodyne");
+              }
+              else if (shift_new == MANUAL_HETERODYNE)
+              {
+                  Display->println("Manual Heterodyne");
+              }
               Display->setCursor(3,37);
               Display->println(het_freq);
               Display->sendBuffer();
-
       }
 
       
@@ -1137,3 +1182,15 @@ void printNumber(float n) {
   }
   */
 }
+
+
+    void adjust_heterodyne_LO(int freq)
+    {
+            SineL.frequency(freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));  
+            SineR.frequency(freq/(SAMPLE_RATE/AUDIO_SAMPLE_RATE_EXACT));
+            SineL.amplitude(0.9f);
+            SineR.amplitude(0.9f);
+            last_LO_frequency = freq;
+            het_freq = freq;
+            display_het_freq();
+    }
