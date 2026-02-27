@@ -81,6 +81,7 @@
 #include <arm_const_structs.h> // in the Teensy 4.0 audio library, the ARM CMSIS DSP lib is already a newer version
 #include <utility/imxrt_hw.h>
 #include <U8g2lib.h>
+#include "bitmaps.h"
 
 #define DEBUG
 #define PIH 1.5707963267948966192313216916398f
@@ -249,6 +250,8 @@ int hop2 = 2;
 int hop3 = 3;
 
 
+
+
 void setup() {
   Serial.begin(115200);
   delay(100);
@@ -320,7 +323,16 @@ void setup() {
   }
   Display->sendBuffer();
   delay(1000);
-  
+
+  Display->clearBuffer();
+  // https://github.com/olikraus/u8g2/wiki/u8g2reference#drawbitmap
+  Display->drawBitmap(0,0,8,64,singing_bird);
+  Display->sendBuffer();
+  delay(1000);
+  Display->clearBuffer();
+  Display->drawBitmap(0,0,12,45,Bat);
+  Display->sendBuffer();
+  delay(1000);
   Serial.println("DD4WH time domain pitch shifter following Hear Birds Again by Harolds Mills");
   display_mode();
   
@@ -865,6 +877,7 @@ float m_sinc(int m, float fc)
               if(shift == MANUAL_HETERODYNE)
               {
                   het_freq = het_freq + het_freq_const;
+                  if(het_freq > 120000) het_freq = 120000;
                   adjust_heterodyne_LO(het_freq);
               }
               if(last_up_button_state == HIGH)
@@ -878,6 +891,7 @@ float m_sinc(int m, float fc)
               if(shift == MANUAL_HETERODYNE)
               {
                   het_freq = het_freq - het_freq_const;
+                  if(het_freq < 8000) het_freq = 8000;
                   adjust_heterodyne_LO(het_freq);
               }
               if(last_down_button_state == HIGH)
@@ -1122,40 +1136,46 @@ void Print_processor_load(long msec) {
       void display_mode(void)
       {
               Display->clearBuffer();
-              Display->setFont(u8g2_font_6x10_mf);  // Hauteur 7
-              Display->setCursor(3,25);
-              if (shift_new != 5)
-              {
-                  Display->println("Pitch Shift: ");
-              }
-              
-              Display->setCursor(3,37);
+
               switch(shift_new)
               {
-                  case 1: Display->printf("zero! "); break;
-                  case 2: Display->printf("one "); break;
-                  case 3: Display->printf("one & a half "); break;
-                  case 4: Display->printf("two "); break;
+                  case AUTO_HETERODYNE:
+                  case MANUAL_HETERODYNE:
+                      display_bat();
+                      Display->setFont(u8g2_font_spleen16x32_mr);  
+                      //Display->setFont(u8g2_font_9x18_mn);  // 
+                      Display->setCursor(96,18);
+                      break;
+                  case PITCHSHIFT_1:
+                  case PITCHSHIFT_15:
+                  case PITCHSHIFT_2:
+                  case PASSTHRU:
+                      display_bird();
+                      Display->setFont(u8g2_font_spleen16x32_mr);  // 
+                      Display->setCursor(70,26);
+                      break;  
+                  default: break;     
+              }
+              switch(shift_new)
+              {
+                  case PASSTHRU: Display->printf(" 0"); break;
+                  case PITCHSHIFT_1: Display->printf(" 1"); break;
+                  case PITCHSHIFT_15: Display->printf("1.5"); break;
+                  case PITCHSHIFT_2: Display->printf(" 2"); break;
+                  case MANUAL_HETERODYNE: Display->println("M"); break;
+                  case AUTO_HETERODYNE: Display->println("A"); break;
                   default: break;
               }
-              Display->println("oct.");
+              //Display->println("oct.");
               Display->sendBuffer();
       }
 
       void display_het_freq(void)
       {
-              Display->clearBuffer();
-              Display->setFont(u8g2_font_6x10_mf);  // Hauteur 7
-              Display->setCursor(3,25);
-              if (shift_new == AUTO_HETERODYNE)
-              {
-                  Display->println("Auto-Heterodyne");
-              }
-              else if (shift_new == MANUAL_HETERODYNE)
-              {
-                  Display->println("Manual Heterodyne");
-              }
-              Display->setCursor(3,37);
+              //Display->clearBuffer();
+              //Display->setFont(u8g2_font_spleen8x16_mn);  // 
+              Display->setFont(u8g2_font_9x18_mn);
+              Display->setCursor(32,48);
               Display->println(het_freq);
               Display->sendBuffer();
       }
@@ -1194,3 +1214,16 @@ void printNumber(float n) {
             het_freq = freq;
             display_het_freq();
     }
+
+
+void display_bird()
+{
+      // https://github.com/olikraus/u8g2/wiki/u8g2reference#drawbitmap
+      Display->drawBitmap(0,0,8,64,singing_bird);
+}
+
+
+void display_bat()
+{
+      Display->drawBitmap(0,0,12,45,Bat);
+}
