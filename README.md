@@ -1,4 +1,12 @@
-  Super Ears
+  #Super Ears
+
+  Did you ever wanted to be able to hear like a bird or a bat or an insect ?
+  Then SUPER EARS is the right toy for you.
+
+  It enables you to hear high frequency sounds you have never been able to hear (or you lost this ability because of your age)
+
+  --> hear like a 12-year old (or even like a 12 year old bat)
+
   
   Compensating age-related high frequency loss for bird and Orthoptera field work
   and automatic heterodyne detector for bats
