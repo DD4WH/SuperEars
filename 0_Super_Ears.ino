@@ -1,31 +1,38 @@
-/*
+/*******************************************************
  * Super Ears
+ * https://github.com/DD4WH/SuperEars
+ *  
+ * (c) Frank Dziock DD4WH 2026-03-20
+ ******************************************************* 
  * 
  * Compensating age-related high frequency loss for bird and Orthoptera field work
  * optional: automatic heterodyne detector for bats
  * 
  * Pitch shifting in the time domain for high pitched birds & Orthoptera
- * & auto heterodyne mode for ultrasound, eg. bats & Tettigoniidae
+ * & auto heterodyne mode for ultrasound, eg. bats & Katydids/Tettigoniidae
  * 
  * implements pitch shifting in the time domain and is based on an idea by Lang Elliott & Herb Susmann for the "Hear birds again"-project,
  * specifically for the now deprecated SongFinder pitch shifter units. 
  * The algorithm can shift the audio down by a factor of two (one octave), three (1.5 octaves) or four (two octaves). 
  * Find a graph showing the implementation for the case of downshifting by 4 here: https://github.com/DD4WH/BirdSongPitchShifter#readme
- *  * Many thanks go to Harold Mills & Lang Elliott for explaining this algorithm to me and answering my questions ! :-) 
+ * Also adds simple heterodyne frequency shift (auto & manual) for bats & katydids
+ * 
+ * CREDITS:
+ * Many thanks go to Harold Mills & Lang Elliott for explaining this algorithm to me and answering my questions ! :-) 
  * https://hearbirdsagain.org/
- * 
  * Many thanks to Jean-Do Vrignault for the Teensy Recorder code!
- * 
- * (c) Frank DD4WH 2022-10-05
- *  this version from 2024-07-23
- *  latest version from 2026-02-22
- * 
+ * Many thanks to Frank Bösing for the Teensy sample rate change code and many other things
+ * Many thanks to Walter, WMXZ for DSP/filtering support 
+ *  
  * TODO:
  * - use FIR filters instead of IIR to preserve phase information for stereo locating (is this important???)
- * - use FFT results to search for highest peak frequency and tune the internal oscillator for auto-heterodyne mode
+ * - design new PCB with codec that can really cope with ultrasound (sample freq 384ksps or 768ksps)
  * 
  * 
- * uses Teensy 4.1 and external ADC / DAC connected on perf board with ground plane
+ * uses Teensy 4.1 and PCM1808a ADC and PCM5102 DAC connected on perf board with ground plane
+ * uses two AOM5024 electret mics (audio range, very low noise, 80dB SNR) 
+ * alternative two ICS40730 (ultrasound range, quite low noise, 73dB SNR)
+ * audio/ultrasound preamp with opamps before ADC 
  * 
  *  PCM5102A DAC module
     VCC = Vin
@@ -109,6 +116,7 @@ double SAMPLE_RATE = 96000; // standard sample rate
 float32_t vol_knob_gain_dB = 0.0;
 float32_t audio_gain = 2.0f; 
 float32_t het_gain_factor = 1.0f;
+float32_t mic_gain_factor = 1.0f;
 
 // DD4WH: 3 buttons used
 #define PINPUSH  31 //DD4WH
@@ -177,11 +185,17 @@ AudioConnection          patchCord19(biquadOUTR, 0, i2sOUT, 0);
 #define AUTO_HETERODYNE     5
 #define MANUAL_HETERODYNE   6
 #define SET_CONTRAST        7
+#define SET_MIC             8
+
+#define MIC_ICS             1
+#define MIC_AOM             2
 
 int shift = PITCHSHIFT_1; // 1 = pass-thru, 5 = heterodyne, 2-4 = shift by one (2), one-and-a-half (3) or two octaves (4)
 int shift_new = PITCHSHIFT_1;
-int lowest_shift = PITCHSHIFT_1; // to allow pass-thru (beware of feedback !), set this to 1, otherwise set this to 2
-int highest_shift = SET_CONTRAST;
+int lowest_shift = PITCHSHIFT_1; // to allow pass-thru (beware of feedback !), set this to PASSTHRU, otherwise set this to PITCHSHIFT_1
+int highest_shift = SET_MIC;
+uint8_t mic = MIC_ICS;
+
 #define BLOCK_SIZE 128
 const int N_BLOCKS = 6; //9; // 6 blocks á 128 samples  = 768 samples. No. of samples has to be dividable by 2 AND by 3 AND by 4 // 6 blocks of 128 samples == 768 samples = 17.4ms of delay
 const int WINDOW_LENGTH = N_BLOCKS * BLOCK_SIZE;
@@ -828,6 +842,12 @@ float m_sinc(int m, float fc)
                   Display->setContrast(contrast);
                   display_contrast();
               }
+              else if(shift == SET_MIC)
+              {
+                  mic = MIC_ICS;
+                  change_mic();
+                  display_mic();
+              }
               if(last_up_button_state == HIGH)
               {
                   Serial.println("Reset up_down_counter");
@@ -848,6 +868,12 @@ float m_sinc(int m, float fc)
                   if(contrast < 0) contrast = 0;
                   Display->setContrast(contrast);
                   display_contrast();
+              }
+              else if(shift == SET_MIC)
+              {
+                  mic = MIC_AOM;
+                  change_mic();
+                  display_mic();
               }
               if(last_down_button_state == HIGH)
               {
@@ -898,8 +924,8 @@ float m_sinc(int m, float fc)
             audio_gain = powf(10.0, vol_knob_gain_dB / 20.0);
             //if(shift == 5) audio_gain *=2.0f;
             //if(shift == AUTO_HETERODYNE || shift == MANUAL_HETERODYNE) audio_gain *=10.0f;
-            gainR.gain(audio_gain * het_gain_factor);
-            gainL.gain(audio_gain * het_gain_factor);
+            gainR.gain(audio_gain * het_gain_factor * mic_gain_factor);
+            gainL.gain(audio_gain * het_gain_factor * mic_gain_factor);
             //Serial.print("Poti-Wert (0 bis 1): "); Serial.println(val);
             //Serial.print("servicePotentiometer: Digital Gain dB = "); Serial.println(vol_knob_gain_dB); //print text to Serial port for debugging
           }
@@ -1007,7 +1033,7 @@ float m_sinc(int m, float fc)
           arm_mean_f32(FFT_bin, 128, &FFT_mean);
           //Serial.print("Mean: "); Serial.print(FFT_mean, 6); Serial.print("              MAX:  "); Serial.print(FFT_max,4); Serial.print("               MAX/MEAN = "); Serial.println(FFT_max/FFT_mean, 2); 
           // only adjust frequency 
-          if(FFT_max > FFT_mean * 4.0f && FFT_max > 0.002f)
+          if(FFT_max > (FFT_mean * 4.0f / mic_gain_factor) && FFT_max > (0.002f / mic_gain_factor))
           {
               FFT_max_freq = FFT_max_freq * 0.5 + (FFT_max_idx * SAMPLE_RATE / FFT_points) * 0.5f;
               
@@ -1083,7 +1109,11 @@ float m_sinc(int m, float fc)
                       display_bird();
                       Display->setFont(u8g2_font_spleen16x32_mr);  // 
                       Display->setCursor(70,16);
-                      break;  
+                      break;
+                  case SET_MIC:
+                      if(mic == MIC_ICS) display_bird();
+                      else display_bat();   
+                      break;   
                   default: break;     
               }
               switch(shift_new)
@@ -1118,6 +1148,9 @@ float m_sinc(int m, float fc)
                       Display->setCursor(73,4);
                       Display->setFont(u8g2_font_7x14_mf);
                       Display->println("Contrast"); 
+                      break;
+                  case SET_MIC: 
+                      display_mic(); 
                       break;
                   default: break;
               }
@@ -1261,8 +1294,8 @@ void init_heterodyne(void) {
   SineR.amplitude(0.9f);
   // adjust gain
   het_gain_factor = 10.0f;
-  gainR.gain(audio_gain * het_gain_factor);
-  gainL.gain(audio_gain * het_gain_factor);
+  gainR.gain(audio_gain * het_gain_factor * mic_gain_factor);
+  gainL.gain(audio_gain * het_gain_factor * mic_gain_factor);
   display_het_freq();
   AudioInterrupts();
  }
@@ -1287,9 +1320,35 @@ void init_pitch_shift(void) {
   SineR.amplitude(0.0f);
   // adjust gain
   het_gain_factor = 1.0f;
-  gainR.gain(audio_gain * het_gain_factor);
-  gainL.gain(audio_gain * het_gain_factor);
+  gainR.gain(audio_gain * het_gain_factor * mic_gain_factor);
+  gainL.gain(audio_gain * het_gain_factor * mic_gain_factor);
   AudioInterrupts(); 
   PitchShiftINL.begin(); // start the input queues for pitch shift 
   PitchShiftINR.begin();
 }
+
+void change_mic(void) // change mic_gain_factor
+{
+    if(mic == MIC_ICS) mic_gain_factor = 1.0f;
+    else mic_gain_factor = 2.5f;
+    // display mic name
+}
+      void display_mic(void)
+      {
+              Display->clearBuffer();
+              Display->setCursor(16,52);
+              if(mic == MIC_ICS)
+              {
+                  display_bird();
+                  Display->println("Audio AOM");
+              }
+              else 
+              {
+                  display_bat();
+                  Display->println("Ultrasound ICS");
+              }
+              Display->setCursor(90,24);
+              Display->setFont(u8g2_font_7x14_mf);
+              Display->println("Mic"); 
+              Display->sendBuffer();
+      }
