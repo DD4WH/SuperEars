@@ -8,7 +8,7 @@
 
   It uses very good stereo ultra low noise mics (audio: AOM5024 or ultrasound: ICS40730), a stereo preamp, a stereo ADC, a Teensy 4.1 microcontroller and a stereo DAC to shift your desired audio or ultrasound into your preferred frequency range.
 
-  [Super Ears by DD4WH]()
+  [Super Ears by DD4WH](Super_Ears_hardware_DD4WH_20260320_233321.jpg)
 
   ### Features:
   * spatial sound pickup (3D), so you can locate the sound you want to hear
