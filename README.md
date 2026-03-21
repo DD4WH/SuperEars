@@ -11,7 +11,7 @@
   ![Super Ears by DD4WH](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_hardware_DD4WH_20260320_233321.jpg)
 
   ### Features:
-  * spatial sound pickup (3D), so you can locate the sound you want to hear, it uses stereo headphones with attached mics on each ear (see here: https://hearbirdsagain.org/)
+  * spatial sound pickup (3D), so you can locate the sound you want to hear, it uses stereo headphones with attached mics on each ear (see here: [https://hearbirdsagain.org/problem-and-solutions/#headset-conundrum]
   * real time audio pitch shift by 1, 1.5 or 2 octaves
   * ultrasound heterodyne frequency shift (automatic or manual frequency adjustment)
  
