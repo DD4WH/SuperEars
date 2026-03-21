@@ -34,9 +34,13 @@
  * Stereo headphones with two AOM5024 attached to each earphone (if you prefer ultrasound detection, use ICS40730) -> inspired by hearbirdsagain.com
  * Teensy 4.1
  * two Audio preamp PCBs by Elector (modified: low noise TL972 opamps and caps and resistors adjusted for ultrasound response)
+   ![Microphone preamp](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_preamp_DD4WH_20260320_233556.jpg)
+ * 
  * ADC PCM1808
  * DAC PCM5102
  * separate power supply for the preamp with lithium ion battery to suppress noise
+
+ * 
   
   
    PCM5102A DAC module
