@@ -24,7 +24,13 @@
 
 ![this is the audio flow diagram](Super_Ears_Teensy_Audio_flow_DD4WH.png)
 
-  * Find a graph showing the implementation for the case of downshifting by 4 here: https://github.com/DD4WH/BirdSongPitchShifter#readme
+  * This graph shows the implementation for the case of downshifting by 4:
+ ![Downshifting by 4](https://user-images.githubusercontent.com/14326464/194013110-f01d8397-0838-47c0-8373-3df8eebc1835.png)
+
+
+
+  *
+  *    here: https://github.com/DD4WH/BirdSongPitchShifter#readme
   * for bats, a simple heterodyne algorithm is implemented which mixes an internally produced frequency with the incoming ultrasound and outputs the difference frequency to the headphone output
   
    
