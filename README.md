@@ -8,6 +8,8 @@
 
   It uses very good stereo ultra low noise mics (audio: AOM5024 or ultrasound: ICS40730), a stereo preamp, a stereo ADC, a Teensy 4.1 microcontroller and a stereo DAC to shift your desired audio or ultrasound into your preferred frequency range.
 
+  [Super Ears by DD4WH]()
+
   ### Features:
   * spatial sound pickup (3D), so you can locate the sound you want to hear
   * real time audio pitch shift by 1, 1.5 or 2 octaves
@@ -25,12 +27,10 @@
 ![this is the audio flow diagram](Super_Ears_Teensy_Audio_flow_DD4WH.png)
 
   * This graph shows the implementation for the case of downshifting by 4:
+
  ![Downshifting by 4](https://user-images.githubusercontent.com/14326464/194013110-f01d8397-0838-47c0-8373-3df8eebc1835.png)
 
 
-
-  *
-  *    here: https://github.com/DD4WH/BirdSongPitchShifter#readme
   * for bats, a simple heterodyne algorithm is implemented which mixes an internally produced frequency with the incoming ultrasound and outputs the difference frequency to the headphone output
   
    
