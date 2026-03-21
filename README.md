@@ -6,7 +6,7 @@
   
   If yes, then SUPER EARS is the right toy for you.
 
-  It uses very good stereo ultra low noise mics (audio: AOM5024 or ultrasound: ICS40730), a stereo preamp, a stereo ADC, a Teensy 4.1 microcontroller and a stereo DAC to shift your desired audio or ultrasound into your preferred frequency range.
+  It uses very good stereo ultra low noise mics (audio: AOM5024 or ultrasound: ICS40730), a stereo preamp, a stereo ADC, a Teensy 4.1 microcontroller and a stereo DAC to shift your desired audio or ultrasound into your preferred frequency range. One button lets you toggle between pitch shift modes, two other buttons adjust the heterodyne frequency, the pot adjusts the volume.
 
   ![Super Ears by DD4WH](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_hardware_DD4WH_20260320_233321.jpg)
 
