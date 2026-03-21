@@ -47,7 +47,7 @@
 
 ![Pitch shift]()
 
-![Setting screen contrast]()
+![Manual heterodyne mode](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_heterodyne_manual_DD4WH_20260320_233136.jpg)
 
 
 
