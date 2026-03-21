@@ -20,7 +20,10 @@
 
   ### How does this work technically ?
   * the software on the Teensy 4.1 implements pitch shifting in the time domain and is based on an idea by Lang Elliott & Herb Susmann for the "Hear birds again"-project, specifically for the now deprecated SongFinder pitch shifter units. 
-  * The algorithm can shift the audio down by a factor of two (one octave), three (1.5 octaves) or four (two octaves). 
+  * The algorithm can shift the audio down by a factor of two (one octave), three (1.5 octaves) or four (two octaves).
+
+![this is the audio flow diagram]()
+
   * Find a graph showing the implementation for the case of downshifting by 4 here: https://github.com/DD4WH/BirdSongPitchShifter#readme
   * for bats, a simple heterodyne algorithm is implemented which mixes an internally produced frequency with the incoming ultrasound and outputs the difference frequency to the headphone output
   
