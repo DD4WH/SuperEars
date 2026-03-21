@@ -43,7 +43,15 @@
 
 ![Hardware inside setup](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_hardware_inside_DD4WH_20260320_233501.jpg)
 
- * 
+### Screenshots:
+
+![Pitch shift]()
+
+![Setting screen contrast]()
+
+
+
+
   
   
    PCM5102A DAC module
