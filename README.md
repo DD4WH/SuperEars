@@ -30,22 +30,14 @@
 
  ![Downshifting by 4](https://user-images.githubusercontent.com/14326464/194013110-f01d8397-0838-47c0-8373-3df8eebc1835.png)
 
-
-  * for bats, a simple heterodyne algorithm is implemented which mixes an internally produced frequency with the incoming ultrasound and outputs the difference frequency to the headphone output
+ ### What is the hardware setup ?
+ * Stereo headphones with two AOM5024 attached to each earphone (if you prefer ultrasound detection, use ICS40730) -> inspired by hearbirdsagain.com
+ * Teensy 4.1
+ * two Audio preamp PCBs by Elector (modified: 972 opamps and caps and resistors adjusted for ultrasound response)
+ * ADC PCM1808
+ * DAC PCM5102
+ * separate power supply for the preamp with lithium ion battery to suppress noise
   
-   
-   
-   
-   
-   
-   
-   * Many thanks go to Harold Mills & Lang Elliott for explaining this algorithm to me and answering my questions ! :-) 
-  https://hearbirdsagain.org/
-  
-  Many thanks to Jean-Do Vrignault for the Teensy Recorder code!
-
- Hardware needed:
-  * uses Teensy 4.1 and external ADC / DAC connected on perf board with ground plane
   
    PCM5102A DAC module
     VCC = Vin
@@ -72,6 +64,12 @@
     SCK = MCLK (23) via series 100 Ohm
     GND = GND
     3.3V = 3.3V
+
+   Credits:   
+   
+   * Many thanks go to Harold Mills & Lang Elliott for explaining this algorithm to me and answering my questions ! :-) 
+  https://hearbirdsagain.org/
+   * Many thanks to Jean-Do Vrignault for the Teensy Recorder code!
    
    OLED display SSH1106
    
