@@ -37,10 +37,11 @@
 
 ![Microphone preamp](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_preamp_DD4WH_20260320_233556.jpg)
 
- * 
  * ADC PCM1808
  * DAC PCM5102
  * separate power supply for the preamp with lithium ion battery to suppress noise
+
+![Hardware inside setup]()
 
  * 
   
