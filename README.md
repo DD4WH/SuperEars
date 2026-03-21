@@ -47,18 +47,16 @@
 
 ### pitch shift mode
 
-![Pitch shift]()
+![Pitch shift](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_pitch_shift_1_5_octaves_DD4WH_20260320_233115.jpg)
 
 ### Manual heterodyne mode
 
 ![Manual heterodyne mode](https://github.com/DD4WH/SuperEars/blob/main/Super_Ears_heterodyne_manual_DD4WH_20260320_233136.jpg)
 
 
-
-
+### pin assignments  
   
-  
-   PCM5102A DAC module
+## PCM5102A DAC module
     VCC = Vin
     3.3v = NC
     GND = GND
@@ -70,7 +68,7 @@
     FMT = GND
     XMT = 3.3V (HIGH)
     
-    PCM1808 ADC module:    
+## PCM1808 ADC module:    
     FMT = GND
     MD1 = GND
     MD0 = GND
@@ -84,13 +82,7 @@
     GND = GND
     3.3V = 3.3V
 
-   Credits:   
-   
-   * Many thanks go to Harold Mills & Lang Elliott for explaining this algorithm to me and answering my questions ! :-) 
-  https://hearbirdsagain.org/
-   * Many thanks to Jean-Do Vrignault for the Teensy Recorder code!
-   
-   OLED display SSH1106
+ ## OLED display SSH1106
    
    Vcc = Vcc 3.3V
    GND = GND
@@ -103,3 +95,9 @@
    UP      30 
    DOWN    32
    PUSH    31
+
+ ##  Credits:   
+   
+   * Many thanks go to Harold Mills & Lang Elliott for explaining this algorithm to me and answering my questions ! :-) 
+  https://hearbirdsagain.org/
+   * Many thanks to Jean-Do Vrignault for the Teensy Recorder code!
